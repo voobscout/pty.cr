@@ -16,15 +16,17 @@ class Pty
           return bytes_read
         rescue ex : IO::Error
           # Handle specific error cases for PTY
-          if ex.errno == Errno::EBADF || ex.errno == Errno::EIO
-            return 0
-          elsif ex.errno == Errno::EAGAIN
-            # If would block, wait and try again
-            next
-          else
-            # Re-raise other errors
-            raise ex
+          if ex.is_a?(SystemError::Errno)
+            errno = ex.as(SystemError::Errno).errno
+            if errno == Errno::EBADF || errno == Errno::EIO
+              return 0
+            elsif errno == Errno::EAGAIN
+              # If would block, wait and try again
+              next
+            end
           end
+          # Re-raise other errors
+          raise ex
         end
       end
     end
