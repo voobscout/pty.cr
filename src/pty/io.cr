@@ -8,15 +8,46 @@ class Pty
     end
 
     protected def unbuffered_read(slice : Bytes)
-      evented_read(slice, "Error reading file") do
-        LibC.read(fd, slice, slice.size).tap do |return_code|
-          if return_code == -1 && (Errno.value == Errno::EBADF || Errno.value == Errno::EIO)
-            return 0
-          else
-          end
+      # Replace evented_read with direct LibC.read call and proper error handling
+      bytes_read = LibC.read(fd, slice, slice.size)
+      
+      if bytes_read == -1
+        if Errno.value == Errno::EAGAIN || Errno.value == Errno::EWOULDBLOCK
+          # Wait until the file descriptor is readable
+          wait_readable
+          return unbuffered_read(slice)
+        elsif Errno.value == Errno::EBADF || Errno.value == Errno::EIO
+          return 0
+        else
+          raise IO::Error.from_errno("Error reading file")
         end
       end
-      #     super(slice)
+      
+      bytes_read
+    end
+
+    # Wait until the file descriptor is readable
+    private def wait_readable
+      Crystal::System::FileDescriptor.wait_readable(fd)
+      true
+    rescue ex : IO::Error
+      if ex.errno == Errno::EBADF || ex.errno == Errno::EIO
+        false
+      else
+        raise ex
+      end
+    end
+
+    # Wait until the file descriptor is writable
+    private def wait_writable
+      Crystal::System::FileDescriptor.wait_writable(fd)
+      true
+    rescue ex : IO::Error
+      if ex.errno == Errno::EBADF || ex.errno == Errno::EIO
+        false
+      else
+        raise ex
+      end
     end
 
     def tcflush : Nil
