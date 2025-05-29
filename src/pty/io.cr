@@ -9,8 +9,13 @@ class Pty
 
     # Wait until the file descriptor is readable
     private def wait_readable
-      # Use the event loop's wait_readable method
-      Crystal::EventLoop.current.wait_readable(fd)
+      loop do
+        readable = IO.select([self], nil, nil, nil)
+        return true if readable && readable[0].includes?(self)
+        
+        # If we get here without returning, something went wrong
+        return false
+      end
     rescue ex : IO::Error
       # Handle specific errors that might occur during wait
       if ex.errno == Errno::EBADF || ex.errno == Errno::EIO
@@ -22,8 +27,13 @@ class Pty
 
     # Wait until the file descriptor is writable
     private def wait_writable
-      # Use the event loop's wait_writable method
-      Crystal::EventLoop.current.wait_writable(fd)
+      loop do
+        _, writable = IO.select(nil, [self], nil, nil)
+        return true if writable && writable[0].includes?(self)
+        
+        # If we get here without returning, something went wrong
+        return false
+      end
     rescue ex : IO::Error
       # Handle specific errors that might occur during wait
       if ex.errno == Errno::EBADF || ex.errno == Errno::EIO
