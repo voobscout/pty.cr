@@ -16,8 +16,8 @@ class Pty
           return bytes_read
         rescue ex : IO::Error
           # Handle specific error cases for PTY
-          if ex.is_a?(SystemError::Errno)
-            errno = ex.as(SystemError::Errno).errno
+          if ex.responds_to?(:errno)
+            errno = ex.errno
             if errno == Errno::EBADF || errno == Errno::EIO
               return 0
             elsif errno == Errno::EAGAIN
