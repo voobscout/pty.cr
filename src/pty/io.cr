@@ -7,92 +7,16 @@ class Pty
       super(fd)
     end
 
-    # Wait until the file descriptor is readable
-    private def wait_readable
-      loop do
-        readable = IO.select([self], nil, nil, nil)
-        return true if readable && readable[0].includes?(self)
-        
-        # If we get here without returning, something went wrong
-        return false
-      end
-    rescue ex : IO::Error
-      # Handle specific errors that might occur during wait
-      if ex.errno == Errno::EBADF || ex.errno == Errno::EIO
-        return false
-      else
-        raise ex
-      end
-    end
-
-    # Wait until the file descriptor is writable
-    private def wait_writable
-      loop do
-        _, writable = IO.select(nil, [self], nil, nil)
-        return true if writable && writable[0].includes?(self)
-        
-        # If we get here without returning, something went wrong
-        return false
-      end
-    rescue ex : IO::Error
-      # Handle specific errors that might occur during wait
-      if ex.errno == Errno::EBADF || ex.errno == Errno::EIO
-        return false
-      else
-        raise ex
-      end
-    end
-
     protected def unbuffered_read(slice : Bytes)
-      # STDOUT.puts "#{self.class} #{fd} ubuf read #{slice.bytesize}"
-      #    return 0 if @temp_closed.get == 1
-
-      loop do
-        bytes_read = LibC.read(fd, slice, slice.size)
-        if bytes_read == -1
-          case Errno.value
-          when Errno::EAGAIN, Errno::EWOULDBLOCK
-            # Wait until the file descriptor is readable
-            if wait_readable
-              next
-            else
-              return 0
-            end
-          when Errno::EINTR
-            next # Retry if interrupted by signal
-          when Errno::EBADF, Errno::EIO
-            return 0 # Handle PTY-specific errors
+      evented_read(slice, "Error reading file") do
+        LibC.read(fd, slice, slice.size).tap do |return_code|
+          if return_code == -1 && (Errno.value == Errno::EBADF || Errno.value == Errno::EIO)
+            return 0
           else
-            raise IO::Error.new("Error reading file")
           end
         end
-        return bytes_read
       end
-    end
-
-    # Perform a write operation with proper error handling
-    protected def unbuffered_write(slice : Bytes)
-      total_written = 0
-      while total_written < slice.size
-        bytes_written = LibC.write(fd, slice + total_written, slice.size - total_written)
-        if bytes_written == -1
-          case Errno.value
-          when Errno::EAGAIN, Errno::EWOULDBLOCK
-            # Wait until the file descriptor is writable
-            if wait_writable
-              next
-            else
-              return total_written
-            end
-          when Errno::EINTR
-            next # Retry if interrupted by signal
-          else
-            raise IO::Error.new("Error writing to file")
-          end
-        end
-        total_written += bytes_written
-      end
-      total_written
+      #     super(slice)
     end
 
     def tcflush : Nil
