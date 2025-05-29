@@ -12,8 +12,7 @@ class Pty
     protected def unbuffered_read(slice : Bytes)
       loop do
         begin
-          # Use Crystal's EventLoop read method instead of direct LibC call
-          bytes_read = Crystal::EventLoop.current.read(fd, slice)
+          bytes_read = Crystal::EventLoop.current.read(self, slice)
           return bytes_read
         rescue ex : IO::Error
           # Handle specific error cases for PTY
