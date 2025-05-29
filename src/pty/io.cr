@@ -7,23 +7,31 @@ class Pty
       super(fd)
     end
 
+    private def read_with_error_handling(slice : Bytes, error_message : String)
+      loop do
+        bytes_read = LibC.read(fd, slice, slice.size)
+        if bytes_read == -1
+          case Errno.value
+          when Errno::EAGAIN, Errno::EWOULDBLOCK
+            wait_readable
+            next
+          when Errno::EINTR
+            next # Retry if interrupted by signal
+          when Errno::EBADF, Errno::EIO
+            return 0 # Handle PTY-specific errors
+          else
+            raise IO::Error.new(error_message)
+          end
+        end
+        return bytes_read
+      end
+    end
+
     protected def unbuffered_read(slice : Bytes)
       # STDOUT.puts "#{self.class} #{fd} ubuf read #{slice.bytesize}"
       #    return 0 if @temp_closed.get == 1
 
-      evented_read(slice, "Error reading file") do
-        LibC.read(fd, slice, slice.size).tap do |return_code|
-          if return_code == -1 && (Errno.value == Errno::EBADF || Errno.value == Errno::EIO)
-            # STDOUT.puts "#{self.class} #{fd} ubuf err #{return_code} #{Errno.value}"
-            # STDOUT.puts "#{self.class} #{fd} ubuf err #{String.new(slice[0, return_code.clamp(0,10)]).inspect}" if return_code > 0
-            # Errno.value = 0
-            return 0
-            #           raise IO::Error.new "File not open for reading"
-            # STDOUT.puts "#{self.class} #{fd} ubuf err #{return_code}"
-          else
-          end
-        end
-      end
+      read_with_error_handling(slice, "Error reading file")
       #     super(slice)
     end
 
