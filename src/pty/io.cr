@@ -1,3 +1,5 @@
+require "socket"
+
 class Pty
   class IO < IO::FileDescriptor
     getter temp_closed = Atomic(Int16).new 0
