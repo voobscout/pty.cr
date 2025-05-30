@@ -5,7 +5,7 @@ class Pty
     getter temp_closed = Atomic(Int16).new 0
 
     def self.new(path : Path | String)
-      fd = Crystal::System::File.open(path.to_s, "r+", 0o600)
+      fd = Crystal::System::File.open(path.to_s, "r+", 0o600, true)  # true for blocking mode
       super(fd)
     end
 
